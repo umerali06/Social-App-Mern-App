@@ -1,0 +1,13 @@
+# Set default behavior for all files
+* text=auto
+
+# Explicitly declare text files you want to always normalize
+*.jsx text
+*.js text
+*.json text
+*.css text
+*.html text
+
+# Declare files that should always retain CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf

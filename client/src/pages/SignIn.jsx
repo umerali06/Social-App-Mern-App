@@ -1,37 +1,53 @@
 // client/src/pages/SignIn.jsx
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import {
   Card,
   CardHeader,
   CardTitle,
+  CardDescription,
   CardContent,
   CardFooter,
 } from "../components/ui/card";
-import { Separator } from "../components/ui/separator";
-
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
+import { Label } from "../components/ui/label";
 import { AuthContext } from "../context/AuthContext";
 import { FaGoogle, FaGithub } from "react-icons/fa";
-import { GoogleLogin } from "@react-oauth/google";
-import { GithubLoginButton } from "react-social-login-buttons";
-import api from "../api/axios";
+import { FiMail, FiLock, FiArrowRight } from "react-icons/fi";
+import { cn } from "../lib/utils";
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.2,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+      damping: 10,
+    },
+  },
+};
 
 export default function SignIn() {
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
-  const { isAuthenticated } = useContext(AuthContext);
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // Check if the user is authenticated and redirect to home page
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate("/"); // Redirect to home page if the user is authenticated
-    }
-  }, [isAuthenticated, navigate]);
 
   const handleChange = (e) =>
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
@@ -49,173 +65,188 @@ export default function SignIn() {
     }
   };
 
-  const handleGoogleSuccess = async (response) => {
-    console.log(response); // Log the entire response to inspect its structure
-
-    const { credential, tokenId } = response; // ID Token is likely stored here
-
-    try {
-      // If 'credential' or 'tokenId' is available, use it to send to the backend
-      const idToken = credential || tokenId; // Use whichever token is available
-
-      if (!idToken) {
-        throw new Error("ID Token is missing from the response");
-      }
-
-      // Send the ID Token to the backend for verification
-      const res = await api.post("/auth/google-login", { id_token: idToken });
-
-      // Assuming the backend sends a token on successful login
-      if (res.data.token) {
-        localStorage.setItem("token", res.data.token); // Save token in localStorage or cookies
-        navigate("/"); // Redirect to homepage
-      }
-    } catch (error) {
-      console.error(error); // Log the error for debugging
-      setError("Google login failed. Please try again.");
-    } // Add the missing semicolon here
-  };
-
-  // GitHub OAuth Success
-  const handleGithubSuccess = async (response) => {
-    const { code } = response; // GitHub OAuth code
-    try {
-      await api.post("/auth/github-login", { code }); // Send code to backend for exchange
-      navigate("/"); // Redirect to home page
-    } catch (error) {
-      setError("GitHub login failed. Please try again.");
-    }
-  };
-
-  const handleGitHubLogin = () => {
-    const popup = window.open(
-      "https://github.com/login/oauth/authorize?client_id=Ov23liH1w6AcyEh1I4A4&scope=user",
-      "GitHub Login"
-    );
-
-    // Wait for the user to complete OAuth, and then handle response in the popup window
-    const interval = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(interval); // Clear the interval once the popup is closed
-        navigate("/"); // Optionally handle the redirect or state change after successful login
-      }
-    }, 1000);
-  };
-
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row dark:bg-black bg-white">
-      {/* Left gradient & shapes */}
-      <div className="hidden md:block md:w-1/2 relative bg-gradient-to-tr from-pink-500 to-purple-600 overflow-hidden">
-        <div className="absolute top-12 left-[-4rem] w-72 h-72 bg-white opacity-10 rounded-full animate-ping"></div>
-        <div className="absolute bottom-12 right-[-3rem] w-56 h-56 bg-white opacity-20 rounded-full animate-pulse"></div>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <h1 className="text-white text-5xl font-extrabold drop-shadow-lg">
-            Welcome Back
-          </h1>
-        </div>
-      </div>
-
-      {/* Right form */}
-      <div className="flex w-full h-screen lg:w-1/2 items-center justify-center bg-gray-50 dark:bg-gray-900 p-6 dark:text-white">
-        <Card className="w-full max-w-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-3xl text-center">Sign In</CardTitle>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.3 }}
+        className="w-full max-w-md"
+      >
+        <Card className="border-0 shadow-xl dark:shadow-none overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+          <CardHeader className="text-center space-y-1 pb-2">
+            <motion.div
+              initial={{ y: -20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.2 }}
+            >
+              <CardTitle className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                Welcome Back
+              </CardTitle>
+              <CardDescription className="text-gray-500 dark:text-gray-400">
+                Sign in to access your personalized dashboard
+              </CardDescription>
+            </motion.div>
           </CardHeader>
 
-          <CardContent>
+          <CardContent className="pt-4">
             {error && (
-              <div className="text-red-600 mb-4 text-center">{error}</div>
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="p-3 mb-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-900/30 dark:text-red-300 text-center"
+              >
+                {error}
+              </motion.div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-1">
-                <label htmlFor="email" className="text-medium font-medium">
-                  Email:
-                </label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={form.email}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
+              <motion.div variants={itemVariants} className="space-y-2">
+                <Label
+                  htmlFor="email"
+                  className="text-gray-700 dark:text-gray-300"
+                >
+                  Email Address
+                </Label>
+                <div className="relative">
+                  <FiMail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500" />
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={form.email}
+                    onChange={handleChange}
+                    required
+                    className="pl-10 py-5 rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-indigo-500 dark:placeholder:text-gray-500 dark:text-white"
+                  />
+                </div>
+              </motion.div>
 
-              <div className="space-y-1">
-                <label htmlFor="password" className="text-medium font-medium">
+              <motion.div variants={itemVariants} className="space-y-2">
+                <Label
+                  htmlFor="password"
+                  className="text-gray-700 dark:text-gray-300"
+                >
                   Password
-                </label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={form.password}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
+                </Label>
+                <div className="relative">
+                  <FiLock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500" />
+                  <Input
+                    id="password"
+                    name="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={form.password}
+                    onChange={handleChange}
+                    required
+                    className="pl-10 py-5 rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-indigo-500 dark:placeholder:text-gray-500 dark:text-white"
+                  />
+                </div>
+              </motion.div>
 
-              <Button
-                type="submit"
-                disabled={loading}
-                className="w-full border-amber-50 cursor-pointer dark:bg-white dark:text-black bg-fuchsia-500 text-white hover:text-shadow-zinc-300"
-              >
-                {loading ? "Logging in..." : "Sign In"}
-              </Button>
-              <p className="mt-[-10px] p-0">
+              <motion.div variants={itemVariants} className="flex justify-end">
                 <Link
                   to="/forgot-password"
-                  className="text-indigo-500 hover:underline block text-left"
+                  className="text-sm text-indigo-600 hover:underline dark:text-indigo-400"
                 >
                   Forgot password?
                 </Link>
-              </p>
+              </motion.div>
+
+              <motion.div variants={itemVariants}>
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className={cn(
+                    "w-full py-5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium",
+                    loading && "opacity-80"
+                  )}
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg
+                        className="animate-spin h-5 w-5 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Signing in...
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center gap-2">
+                      Sign In{" "}
+                      <FiArrowRight className="group-hover:translate-x-1 transition-transform" />
+                    </span>
+                  )}
+                </Button>
+              </motion.div>
             </form>
 
-            <div className="relative my-4">
-              {/* Line behind */}
+            <motion.div variants={itemVariants} className="relative my-6">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300 dark:border-gray-700" />
+                <div className="w-full border-t border-gray-200 dark:border-gray-700" />
               </div>
-
-              {/* Text above line */}
-              <div className="relative z-10 flex justify-center">
-                <span className="px-3 bg-white dark:bg-[#101828] text-gray-500 text-xs uppercase">
-                  Or Continue with
+              <div className="relative flex justify-center">
+                <span className="px-3 bg-white dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
+                  OR CONTINUE WITH
                 </span>
               </div>
-            </div>
+            </motion.div>
 
-            {/* Social Login */}
-            <div className="mt-6 grid grid-cols-1 gap-3">
-              {/* Google Login Button */}
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() =>
-                  setError("Google login failed. Please try again.")
-                }
-              />
-              {/* GitHub Login Button */}
-              <GithubLoginButton
-                onClick={handleGitHubLogin} // Handle GitHub login
-                className="flex items-center justify-center py-2 border rounded hover:bg-gray-100 hover:text-black transition w-full"
-              />
-            </div>
+            <motion.div
+              variants={containerVariants}
+              className="grid grid-cols-2 gap-3"
+            >
+              <motion.a
+                variants={itemVariants}
+                href="http://localhost:5000/api/auth/google"
+                className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm font-medium shadow-sm transition-all hover:bg-gray-50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-white"
+              >
+                <FaGoogle className="mr-2 h-4 w-4 text-red-500" />
+                Google
+              </motion.a>
+              <motion.a
+                variants={itemVariants}
+                href="http://localhost:5000/api/auth/github"
+                className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm font-medium shadow-sm transition-all hover:bg-gray-50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-white"
+              >
+                <FaGithub className="mr-2 h-4 w-4" />
+                GitHub
+              </motion.a>
+            </motion.div>
           </CardContent>
 
-          <CardFooter className="pt-2 text-center">
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              Don’t have an account?{" "}
-              <Link to="/signup" className="text-indigo-500 hover:underline">
-                Sign Up
+          <CardFooter className="pt-0 pb-6">
+            <motion.p
+              variants={itemVariants}
+              className="text-center text-sm text-gray-600 dark:text-gray-400"
+            >
+              Don't have an account?{" "}
+              <Link
+                to="/signup"
+                className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+              >
+                Sign up
               </Link>
-            </span>
+            </motion.p>
           </CardFooter>
         </Card>
-      </div>
+      </motion.div>
     </div>
   );
 }

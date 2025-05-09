@@ -1,15 +1,45 @@
 // client/src/pages/ForgotPassword.jsx
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
 import {
   Card,
   CardHeader,
   CardTitle,
+  CardDescription,
   CardContent,
+  CardFooter,
 } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
-import { Separator } from "../components/ui/separator";
+import { Label } from "../components/ui/label";
+import { FiMail, FiArrowRight } from "react-icons/fi";
+import { cn } from "../lib/utils";
 import api from "../api/axios";
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.2,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+      damping: 10,
+    },
+  },
+};
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -23,90 +53,152 @@ export default function ForgotPassword() {
       const res = await api.post("/auth/forgot-password", { email });
       setMessage(res.data.message);
     } catch {
-      setMessage("Oops—something went wrong. Try again.");
+      setMessage("Oops—something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row">
-      {/* Left graphic panel */}
-      <div className="hidden lg:block md:w-1/2 bg-gradient-to-tr from-green-400 to-blue-600 relative overflow-hidden">
-        <div className="absolute top-16 left-[-4rem] w-72 h-72 bg-white opacity-10 rounded-full animate-pulse"></div>
-        <div className="absolute bottom-16 right-[-3rem] w-56 h-56 bg-white opacity-20 rounded-full animate-ping"></div>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <h1 className="text-white text-5xl font-extrabold drop-shadow-lg">
-            Reset Your Password
-          </h1>
-        </div>
-      </div>
-
-      {/* Right form pane */}
-      <div className="flex w-full h-screen lg:w-1/2 items-center justify-center p-6 bg-gray-50 dark:bg-gray-900 dark:text-white">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-2xl text-center">
-              Forgot Password
-            </CardTitle>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.3 }}
+        className="w-full max-w-md"
+      >
+        <Card className="border-0 shadow-xl dark:shadow-none overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+          <CardHeader className="text-center space-y-1 pb-2">
+            <motion.div
+              initial={{ y: -20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.2 }}
+            >
+              <CardTitle className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                Reset Password
+              </CardTitle>
+              <CardDescription className="text-gray-500 dark:text-gray-400">
+                Enter your email to receive a reset link
+              </CardDescription>
+            </motion.div>
           </CardHeader>
-          <CardContent>
+
+          <CardContent className="pt-4">
             {message ? (
-              <p className="p-4 bg-green-100 text-green-800 rounded text-center">
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="p-4 mb-4 text-green-700 bg-green-100 rounded-lg dark:bg-green-900/30 dark:text-green-300 text-center"
+              >
                 {message}
-              </p>
+              </motion.div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="space-y-1">
-                  <label htmlFor="email" className="block text-sm font-medium">
-                    Email address
-                  </label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full border border-gray-300 text-black bg-amber-200 hover:bg-amber-300 hover:text-black transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  disabled={loading}
-                >
-                  {loading ? "Sending..." : "Send Reset Link"}
-                </Button>
-
-                <div className="relative my-4">
-                  {/* Line behind */}
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-300 dark:border-gray-700" />
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <motion.div variants={itemVariants} className="space-y-2">
+                  <Label
+                    htmlFor="email"
+                    className="text-gray-700 dark:text-gray-300"
+                  >
+                    Email Address
+                  </Label>
+                  <div className="relative">
+                    <FiMail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500" />
+                    <Input
+                      id="email"
+                      name="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      className="pl-10 py-5 rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-indigo-500 dark:placeholder:text-gray-500 dark:text-white"
+                    />
                   </div>
+                </motion.div>
 
-                  {/* Text above line */}
-                  <div className="relative z-10 flex justify-center">
-                    <span className="px-3 bg-white dark:bg-[#101828] text-gray-500 text-xs uppercase">
+                <motion.div variants={itemVariants}>
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className={cn(
+                      "w-full py-5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium",
+                      loading && "opacity-80"
+                    )}
+                  >
+                    {loading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <svg
+                          className="animate-spin h-5 w-5 text-white"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                        Sending...
+                      </span>
+                    ) : (
+                      <span className="flex items-center justify-center gap-2">
+                        Send Reset Link{" "}
+                        <FiArrowRight className="group-hover:translate-x-1 transition-transform" />
+                      </span>
+                    )}
+                  </Button>
+                </motion.div>
+
+                <motion.div variants={itemVariants} className="relative my-6">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-200 dark:border-gray-700" />
+                  </div>
+                  <div className="relative flex justify-center">
+                    <span className="px-3 bg-white dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
                       Or go back to
                     </span>
                   </div>
-                </div>
+                </motion.div>
 
-                <div className="text-center">
-                  <a
-                    href="/signin"
-                    className="text-black bg-blue-400 block rounded-[5px] p-[6px] hover:bg-blue-300 text-md font-semibold"
+                <motion.div variants={itemVariants}>
+                  <Link
+                    to="/signin"
+                    className={cn(
+                      "w-full flex items-center justify-center py-3 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium shadow-sm transition-all hover:bg-gray-50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-white"
+                    )}
                   >
                     Sign In
-                  </a>
-                </div>
+                  </Link>
+                </motion.div>
               </form>
             )}
           </CardContent>
+
+          <CardFooter className="pt-0 pb-6">
+            <motion.p
+              variants={itemVariants}
+              className="text-center text-sm text-gray-600 dark:text-gray-400"
+            >
+              Don't have an account?{" "}
+              <Link
+                to="/signup"
+                className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+              >
+                Sign up
+              </Link>
+            </motion.p>
+          </CardFooter>
         </Card>
-      </div>
+      </motion.div>
     </div>
   );
 }

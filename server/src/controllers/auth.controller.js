@@ -1,4 +1,5 @@
 // server/src/controllers/auth.controller.js
+
 const crypto = require("crypto");
 const User = require("../models/User");
 const sendEmail = require("../utils/email");
@@ -22,8 +23,8 @@ const register = catchAsync(async (req, res) => {
 
   res
     .cookie("accessToken", token, cookieOptions)
-    .status(201) // ← hard-code CREATED
-    .json({ user });
+    .status(201)
+    .json({ user, token });
 });
 
 /**
@@ -34,8 +35,8 @@ const login = catchAsync(async (req, res) => {
 
   res
     .cookie("accessToken", token, cookieOptions)
-    .status(200) // ← hard-code OK
-    .json({ user });
+    .status(200)
+    .json({ user, token });
 });
 
 /**
@@ -47,8 +48,9 @@ const logout = catchAsync(async (_req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
+      path: "/",
     })
-    .status(200) // ← hard-code OK
+    .status(200)
     .json({ message: "Successfully logged out" });
 });
 

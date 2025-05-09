@@ -1,17 +1,18 @@
-// server/src/middleware/auth.middleware.js
 const jwt = require("jsonwebtoken");
 const ApiError = require("../utils/ApiError");
 const User = require("../models/User");
 
 module.exports = async (req, res, next) => {
   try {
-    // 1. Grab token from cookie first, then Authorization header
-    const token =
-      // cookie-parser must be mounted upstream in app.js
-      req.cookies?.accessToken ||
-      (req.headers.authorization?.startsWith("Bearer ")
-        ? req.headers.authorization.split(" ")[1]
-        : null);
+    // 1. Check Authorization header or cookie
+    let token;
+
+    const auth = req.headers.authorization;
+    if (auth && auth.startsWith("Bearer ")) {
+      token = auth.split(" ")[1];
+    } else if (req.cookies?.token) {
+      token = req.cookies.token; // ✅ support for cookie-based auth
+    }
 
     if (!token) {
       throw new ApiError(401, "Authentication token missing");
@@ -20,11 +21,11 @@ module.exports = async (req, res, next) => {
     // 2. Verify token
     const payload = jwt.verify(token, process.env.JWT_SECRET);
 
-    // 3. Attach user to request
+    // 3. Fetch and attach user
     const user = await User.findById(payload.sub).select("-password");
     if (!user) throw new ApiError(401, "User not found");
-    req.user = user;
 
+    req.user = user;
     next();
   } catch (err) {
     if (err.name === "JsonWebTokenError" || err.name === "TokenExpiredError") {
@@ -33,3 +34,23 @@ module.exports = async (req, res, next) => {
     next(err);
   }
 };
+
+const authMiddleware = async (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ message: "No token provided" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.sub).select("-password");
+    if (!user) return res.status(401).json({ message: "Invalid token" });
+
+    req.user = user;
+    next();
+  } catch (err) {
+    res
+      .status(401)
+      .json({ message: "Token verification failed", error: err.message });
+  }
+};
+
+module.exports = authMiddleware;

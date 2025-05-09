@@ -5,7 +5,14 @@ import path from "path";
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss({
+      config: {
+        darkMode: "class", // Ensure dark mode is class-based
+      },
+    }),
+  ],
   resolve: {
     alias: {
       // eslint-disable-next-line no-undef

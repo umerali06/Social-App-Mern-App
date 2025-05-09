@@ -1,4 +1,5 @@
-// server/src/models/User.js
+// ✅ STEP 1: Updated User Schema (server/src/models/User.js)
+
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
@@ -30,13 +31,69 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
-  resetPasswordToken: String,
-  resetPasswordExpires: Date,
+  profilePicture: {
+    type: String,
+    default: "",
+  },
+  bio: {
+    type: String,
+    maxlength: 300,
+    trim: true,
+    default: "",
+  },
+  location: {
+    type: String,
+    maxlength: 100,
+    trim: true,
+    default: "",
+  },
+  bannerImage: {
+    type: String,
+    default: "",
+  },
+  isOnline: {
+    type: Boolean,
+    default: false,
+  },
+
+  website: {
+    type: String,
+    trim: true,
+    default: "",
+    validate: {
+      validator: function (v) {
+        return !v || /^https?:\/\/[\w.-]+\.[a-z]{2,}.*$/.test(v);
+      },
+      message: "Please enter a valid URL.",
+    },
+  },
+  socialLinks: {
+    twitter: { type: String, default: "" },
+    linkedin: { type: String, default: "" },
+    github: { type: String, default: "" },
+  },
+  language: {
+    type: String,
+    enum: ["en", "es", "fr", "de"],
+    default: "en",
+  },
+  notificationPreferences: {
+    email: { type: Boolean, default: true },
+    push: { type: Boolean, default: true },
+    mentions: { type: Boolean, default: true },
+    messages: { type: Boolean, default: true },
+  },
+  username: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    minlength: 3,
+    maxlength: 30,
+  },
 });
 
-// Hash password before saving (only for local users)
 userSchema.pre("save", async function (next) {
-  // Skip hashing if not a local-signup or password not provided/modified
   if (
     this.provider !== "local" ||
     !this.isModified("password") ||
@@ -53,7 +110,6 @@ userSchema.pre("save", async function (next) {
   }
 });
 
-// Instance method to compare passwords
 userSchema.methods.isValidPassword = async function (plain) {
   if (!this.password) return false;
   return bcrypt.compare(plain, this.password);

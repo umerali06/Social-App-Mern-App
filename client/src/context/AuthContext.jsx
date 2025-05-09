@@ -1,52 +1,64 @@
-import React, { createContext, useState, useEffect, useContext } from "react";
+/* eslint-disable react-refresh/only-export-components */
+/* eslint-disable no-useless-catch */
+import { createContext, useState, useEffect, useContext } from "react";
 import api from "../api/axios";
 
-// eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext();
-
-// eslint-disable-next-line react-refresh/only-export-components
-export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
+    const token = localStorage.getItem("accessToken");
+    if (!token) {
+      setLoading(false);
+      return;
+    }
 
     api
-      .get("/users/profile", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      .get("/users/profile")
       .then((res) => setUser(res.data.user))
-      .catch(() => {
-        localStorage.removeItem("token");
-        setUser(null);
-      });
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
   }, []);
 
   const signup = async (name, email, password) => {
-    const res = await api.post("/auth/signup", { name, email, password });
-    localStorage.setItem("token", res.data.token);
-    setUser(res.data.user);
+    try {
+      const res = await api.post("/auth/signup", { name, email, password });
+      const { user, token } = res.data;
+      localStorage.setItem("accessToken", token);
+      setUser(user);
+    } catch (err) {
+      throw err;
+    }
   };
 
   const login = async (email, password) => {
-    const res = await api.post("/auth/login", { email, password });
-    localStorage.setItem("token", res.data.token);
-    setUser(res.data.user);
+    try {
+      const res = await api.post("/auth/login", { email, password });
+      const { user, token } = res.data;
+      localStorage.setItem("accessToken", token);
+      setUser(user);
+    } catch (err) {
+      throw err;
+    }
   };
 
-  const logout = () => {
-    localStorage.removeItem("token");
+  const logout = async () => {
+    await api.get("/auth/logout");
+    localStorage.removeItem("accessToken");
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, signup, login, logout }}>
+    <AuthContext.Provider
+      value={{ user, setUser, signup, login, logout, loading }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
+
+// ✅ Add this to fix your import
+export const useAuth = () => useContext(AuthContext);

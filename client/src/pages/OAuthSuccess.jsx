@@ -8,7 +8,7 @@ export default function OAuthSuccess() {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
     if (token) {
-      localStorage.setItem("token", token);
+      localStorage.setItem("accessToken", token);
       // optionally fetch profile and set in context
       navigate("/");
     } else {

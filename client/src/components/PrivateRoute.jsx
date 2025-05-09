@@ -6,9 +6,13 @@ import { AuthContext } from "../context/AuthContext";
 export default function PrivateRoute({ children }) {
   const { user, loading } = useContext(AuthContext);
 
-  // While we’re checking the cookie/profile, don’t redirect
+  // While checking auth status, show a loading spinner
   if (loading) {
-    return null; // or render a spinner here
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-gray-500 text-lg animate-pulse">Loading...</div>
+      </div>
+    );
   }
 
   // Once loaded, only show children if user exists
