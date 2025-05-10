@@ -167,11 +167,19 @@ export default function PostList() {
       deleteCommentInPosts(postId, commentId);
     };
 
-    const handleLikeUpdated = ({ postId, likes }) => {
+    const handleLikeUpdated = ({ postId, likes, isLiked, userId }) => {
+      console.log("Received likeUpdated event:", {
+        postId,
+        likes,
+        isLiked,
+        userId,
+      });
+
       if (!postId || !Array.isArray(likes)) {
         console.error("Invalid like update data:", { postId, likes });
         return;
       }
+
       updateLikesInPosts(postId, likes);
     };
 
@@ -374,11 +382,29 @@ export default function PostList() {
       return;
     }
 
+    console.log("Updating likes in posts:", { postId, likes });
+
     setPosts((prev) =>
-      prev.map((post) => (post?._id === postId ? { ...post, likes } : post))
+      prev.map((post) => {
+        if (post?._id === postId) {
+          console.log("Updating post likes:", {
+            postId,
+            oldLikes: post.likes,
+            newLikes: likes,
+          });
+          return { ...post, likes };
+        }
+        return post;
+      })
     );
+
     setFilteredPosts((prev) =>
-      prev.map((post) => (post?._id === postId ? { ...post, likes } : post))
+      prev.map((post) => {
+        if (post?._id === postId) {
+          return { ...post, likes };
+        }
+        return post;
+      })
     );
   };
 
@@ -420,12 +446,18 @@ export default function PostList() {
   const handleLike = async (postId) => {
     if (!postId || !user?._id) {
       console.error("Invalid like action:", { postId, user });
-      console.error("User is not logged in or missing user._id");
       return;
     }
 
     try {
-      await api.patch(`/posts/${postId}/like`);
+      console.log("Sending like request:", { postId, userId: user._id });
+      const response = await api.patch(`/posts/${postId}/like`);
+      console.log("Like response:", response.data);
+
+      // Update local state with response
+      if (response.data.success) {
+        updateLikesInPosts(postId, response.data.likes);
+      }
     } catch (err) {
       console.error("Failed to like post:", err);
       toast.error(

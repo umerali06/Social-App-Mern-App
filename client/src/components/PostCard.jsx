@@ -81,44 +81,36 @@ export default function PostCard({
   });
   const [isLiking, setIsLiking] = useState(false);
   const [lastRequestId, setLastRequestId] = useState(null);
+  const [isSocketConnected, setIsSocketConnected] = useState(false);
 
   const textareaRef = useRef(null);
   const pickerRef = useRef(null);
   const commentRef = useRef(null);
 
-  // Derived values
-  const isLiked = Array.isArray(localPost.likes)
-    ? localPost.likes.some((like) => {
-        if (typeof like === "object" && like !== null) {
-          return like._id?.toString() === user?._id.toString();
-        }
-        return like?.toString() === user?._id.toString();
-      })
-    : false;
-
-  const isAuthor = localPost.author?._id.toString() === user?._id.toString();
-  const isReshared =
-    localPost.sharedFrom?._id?.toString() === user?._id.toString();
-
-  // Sync localPost and isSaved with prop changes
+  // Check socket connection
   useEffect(() => {
-    setLocalPost({
-      ...post,
-      likes: post.likes || [],
-      savedBy: post.savedBy || [],
-    });
-    setComments(post.comments || []);
-    const savedStatus =
-      post.savedBy?.some(
-        (savedUser) => savedUser?._id.toString() === user?._id.toString()
-      ) || false;
-    setIsSaved(savedStatus);
-    console.log("Post props updated:", {
-      postId: post._id,
-      isSaved: savedStatus,
-      savedBy: post.savedBy,
-    });
-  }, [post]);
+    if (socket) {
+      setIsSocketConnected(socket.connected);
+
+      const handleConnect = () => {
+        console.log("Socket connected");
+        setIsSocketConnected(true);
+      };
+
+      const handleDisconnect = () => {
+        console.log("Socket disconnected");
+        setIsSocketConnected(false);
+      };
+
+      socket.on("connect", handleConnect);
+      socket.on("disconnect", handleDisconnect);
+
+      return () => {
+        socket.off("connect", handleConnect);
+        socket.off("disconnect", handleDisconnect);
+      };
+    }
+  }, [socket]);
 
   // Like handler
   const handleLike = useCallback(async () => {
@@ -126,85 +118,75 @@ export default function PostCard({
     setIsLiking(true);
     const requestId = uuidv4();
     setLastRequestId(requestId);
-    const prevLikes = [...(localPost.likes || [])];
-    const newIsLiked = !isLiked;
-
-    // Optimistic UI update
-    setLocalPost((prev) => {
-      let updatedLikes = [...(prev.likes || [])];
-      if (newIsLiked) {
-        if (
-          !updatedLikes.some(
-            (like) => like._id?.toString() === user?._id.toString()
-          )
-        ) {
-          updatedLikes.push({ _id: user._id, name: user?.name });
-        }
-      } else {
-        updatedLikes = updatedLikes.filter(
-          (like) => like._id?.toString() !== user?._id.toString()
-        );
-      }
-      console.log("Optimistic like update:", {
-        postId: localPost._id,
-        newIsLiked,
-        likes: updatedLikes,
-        requestId,
-      });
-      return { ...prev, likes: updatedLikes };
-    });
-
-    // Timeout to prevent state lock
-    const timeout = setTimeout(() => {
-      setIsLiking(false);
-      console.warn(
-        `Like request timed out: postId=${localPost._id}, requestId=${requestId}`
-      );
-    }, 5000);
 
     try {
+      console.log("Sending like request:", {
+        postId: localPost._id,
+        requestId,
+        isSocketConnected,
+      });
+
       const response = await api.patch(`/posts/${localPost._id}/like`, {
         requestId,
       });
+
       const {
         likes,
         isLiked: serverIsLiked,
         requestId: responseRequestId,
       } = response.data;
+
+      console.log("Received like response:", {
+        postId: localPost._id,
+        likes,
+        serverIsLiked,
+        responseRequestId,
+      });
+
       if (responseRequestId !== requestId) {
         console.warn(
           `Mismatched requestId: expected=${requestId}, received=${responseRequestId}`
         );
         return;
       }
-      setLocalPost((prev) => ({
-        ...prev,
-        likes: Array.isArray(likes) ? likes : prev.likes,
-      }));
+
+      // Update local state with server response
+      setLocalPost((prev) => {
+        const updatedLikes = Array.isArray(likes) ? likes : prev.likes || [];
+        console.log("Updating local state with server response:", {
+          postId: localPost._id,
+          likes: updatedLikes,
+          serverIsLiked,
+          requestId,
+        });
+        return {
+          ...prev,
+          likes: updatedLikes,
+        };
+      });
+
       if (typeof onLike === "function") {
         onLike(localPost._id, serverIsLiked);
       }
-      toast.success(newIsLiked ? "Post liked" : "Post unliked");
-      console.log("Like successful:", { ...response.data, requestId });
+
+      toast.success(serverIsLiked ? "Post liked" : "Post unliked");
     } catch (err) {
-      toast.error(
-        `Failed to update like: ${err.response?.data?.message || err.message}`
-      );
-      console.error("Failed to update like:", {
+      console.error("Like action failed:", {
         error: err.response?.data || err,
         requestId,
       });
-      setLocalPost((prev) => ({ ...prev, likes: prevLikes }));
+      toast.error(
+        `Failed to update like: ${err.response?.data?.message || err.message}`
+      );
     } finally {
-      clearTimeout(timeout);
       setIsLiking(false);
     }
-  }, [isLiking, isLiked, localPost._id, user?._id, user?.name, onLike]);
+  }, [isLiking, localPost._id, onLike, isSocketConnected]);
 
   // Socket event handlers
   useEffect(() => {
-    if (!socket) {
-      console.warn("Socket not initialized");
+    if (!socket || !isSocketConnected) {
+      console.warn("Socket not initialized or not connected");
       return;
     }
 
@@ -216,12 +198,8 @@ export default function PostCard({
       requestId,
       timestamp,
     }) => {
-      if (postId === localPost._id && requestId === lastRequestId) {
-        setLocalPost((prev) => ({
-          ...prev,
-          likes: Array.isArray(likes) ? likes : prev.likes || [],
-        }));
-        console.log("Received likeUpdated:", {
+      if (postId === localPost._id) {
+        console.log("Received likeUpdated event:", {
           postId,
           likes,
           serverIsLiked,
@@ -229,18 +207,25 @@ export default function PostCard({
           requestId,
           timestamp,
         });
-      } else {
-        console.log("Ignored likeUpdated:", {
-          postId,
-          requestId,
-          lastRequestId,
-          timestamp,
+
+        setLocalPost((prev) => {
+          const updatedLikes = Array.isArray(likes) ? likes : prev.likes || [];
+          console.log("Updating local state from socket:", {
+            postId,
+            likes: updatedLikes,
+            serverIsLiked,
+            requestId,
+          });
+          return {
+            ...prev,
+            likes: updatedLikes,
+          };
         });
       }
     };
 
-    const handlePostUpdated = ({ postId, post }) => {
-      if (postId === localPost._id) {
+    const handlePostUpdated = ({ post }) => {
+      if (post._id === localPost._id) {
         setLocalPost({
           ...post,
           likes: post.likes || [],
@@ -249,7 +234,7 @@ export default function PostCard({
         setComments(post.comments || []);
         setEditMode(false);
         setEditedContent(post.content || "");
-        console.log("Received postUpdated:", { postId, post });
+        console.log("Received postUpdated:", { postId: post._id, post });
       }
     };
 
@@ -285,8 +270,13 @@ export default function PostCard({
       }
     };
 
-    const handlePostSaved = ({ postId, isSaved: savedStatus, post }) => {
-      if (postId === localPost._id) {
+    const handlePostSaved = ({
+      postId,
+      isSaved: savedStatus,
+      post,
+      userId,
+    }) => {
+      if (postId === localPost._id && userId === user._id) {
         setLocalPost({
           ...post,
           likes: post.likes || [],
@@ -301,13 +291,14 @@ export default function PostCard({
       }
     };
 
-    const handlePostCreated = ({ post, userId }) => {
-      if (
-        post.sharedFrom?._id === localPost._id &&
-        typeof onReshare === "function"
-      ) {
-        onReshare(localPost._id);
-        console.log("Received postCreated (reshare):", { post, userId });
+    const handlePostCreated = ({ post, userId, type, isNewReshare }) => {
+      if (type === "reshare" && post.sharedFrom?._id === localPost._id) {
+        if (userId === user._id && isNewReshare) {
+          toast.success("Post reshared successfully");
+        }
+        if (typeof onReshare === "function") {
+          onReshare(localPost._id);
+        }
       }
     };
 
@@ -338,6 +329,7 @@ export default function PostCard({
     onReshare,
     editCommentId,
     lastRequestId,
+    isSocketConnected,
   ]);
 
   const handleDeletePost = async () => {
@@ -537,16 +529,11 @@ export default function PostCard({
         onClick: async () => {
           try {
             const response = await api.post(`/posts/${localPost._id}/reshare`);
-            toast.success("Post reshared successfully");
-            if (typeof onReshare === "function") {
+            if (response.data.success && typeof onReshare === "function") {
               onReshare(localPost._id);
             }
-            console.log("Reshare successful:", response.data);
           } catch (err) {
-            toast.error(
-              `Failed to reshare post: ${err.response?.data?.message || err.message}`
-            );
-            console.error("Failed to reshare post:", err.response?.data || err);
+            // No toast for errors
           }
         },
       },
@@ -587,6 +574,20 @@ export default function PostCard({
 
   const commentsToShow = showAllComments ? comments : comments.slice(-2);
   const hasMoreComments = comments.length > 2;
+
+  // Derived values
+  const isLiked = Array.isArray(localPost.likes)
+    ? localPost.likes.some((like) => {
+        if (typeof like === "object" && like !== null) {
+          return like._id?.toString() === user?._id.toString();
+        }
+        return like?.toString() === user?._id.toString();
+      })
+    : false;
+
+  const isAuthor = localPost.author?._id.toString() === user?._id.toString();
+  const isReshared =
+    localPost.sharedFrom?._id?.toString() === user?._id.toString();
 
   return (
     <motion.div

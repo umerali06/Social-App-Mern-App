@@ -72,7 +72,7 @@ const Home = () => {
   useEffect(() => {
     if (location.state?.defaultTab) {
       setActiveTab(location.state.defaultTab);
-      // clear it out so it doesn’t fire again if the user clicks other tabs
+      // clear it out so it doesn't fire again if the user clicks other tabs
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, navigate, location.pathname]);
@@ -82,15 +82,42 @@ const Home = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleNotificationClick = (notif) => {
-    markAsRead(notif._id);
-    setShowNotifications(false);
+  const handleNotificationClick = async (notif) => {
+    console.log("Notification clicked:", {
+      type: notif.type,
+      post: notif.post,
+      postId: notif.post?._id,
+      sender: notif.sender,
+      fullNotification: notif,
+    });
 
-    if (notif.type === "message") {
-      localStorage.setItem("openChatWith", notif.sender._id);
-      navigate(`/chat/${notif.sender._id}`);
-    } else {
-      navigate(`/posts/${notif.post}`);
+    if (!notif) {
+      console.error("Invalid notification object");
+      return;
+    }
+
+    try {
+      await markAsRead(notif._id);
+      setShowNotifications(false);
+
+      if (notif.type === "message") {
+        if (!notif.sender?._id) {
+          console.error("Invalid sender ID for message notification");
+          return;
+        }
+        navigate(`/chat/${notif.sender._id}`);
+      } else {
+        // For post-related notifications (like, comment, reshare)
+        const postId = notif.post?._id;
+        if (!postId) {
+          console.error("No post ID found in notification:", notif);
+          return;
+        }
+        console.log("Navigating to post:", postId);
+        navigate(`/post/${postId}`);
+      }
+    } catch (error) {
+      console.error("Error handling notification click:", error);
     }
   };
 
@@ -179,7 +206,9 @@ const Home = () => {
                     <li key={notif._id}>
                       <div
                         onClick={() => handleNotificationClick(notif)}
-                        className={`p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${!notif.read ? "bg-blue-50 dark:bg-gray-700" : ""}`}
+                        className={`p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                          !notif.read ? "bg-blue-50 dark:bg-gray-700" : ""
+                        }`}
                       >
                         <div className="flex items-start">
                           <div className="flex-shrink-0 pt-0.5">

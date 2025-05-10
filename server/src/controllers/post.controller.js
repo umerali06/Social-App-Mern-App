@@ -147,154 +147,89 @@ const getPostById = async (req, res) => {
 const toggleLike = async (req, res) => {
   try {
     const { postId } = req.params;
-    if (!isValidObjectId(postId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid post ID",
-      });
-    }
-    if (!req.user || !req.user._id || !isValidObjectId(req.user._id)) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized: Invalid or missing user",
-      });
-    }
     const userId = req.user._id;
-    const requestId = uuidv4();
-    const timestamp = new Date().toISOString();
 
-    console.log(
-      `Processing toggleLike: postId=${postId}, userId=${userId}, requestId=${requestId}, timestamp=${timestamp}`
-    );
+    const post = await Post.findById(postId).populate("author", "name");
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
 
-    const session = await mongoose.startSession();
-    await session.withTransaction(async () => {
-      const post = await Post.findById(postId).session(session);
-      if (!post) {
-        throw new Error("Post not found");
-      }
+    const isLiked = post.likes.includes(userId);
+    const update = isLiked
+      ? { $pull: { likes: userId } }
+      : { $addToSet: { likes: userId } };
 
-      const wasLiked = post.likes.includes(userId);
-      console.log(
-        `Before update: postId=${postId}, userId=${userId}, wasLiked=${wasLiked}, likesCount=${post.likes.length}`
-      );
+    const updatedPost = await Post.findByIdAndUpdate(
+      postId,
+      update,
+      { new: true }
+    ).populate("author", "name");
 
-      const update = wasLiked
-        ? { $pull: { likes: userId } }
-        : { $addToSet: { likes: userId } };
+    console.log("[LIKE] Post updated:", {
+      postId,
+      userId,
+      isLiked: !isLiked,
+      likes: updatedPost.likes,
+    });
 
-      const updatedPost = await Post.findOneAndUpdate({ _id: postId }, update, {
-        new: true,
-        session,
-      }).populate("author", "name profilePicture");
-      if (!updatedPost) {
-        throw new Error("Failed to update like status");
-      }
+    // Create like update event
+    const likeUpdateEvent = {
+      postId,
+      userId,
+      isLiked: !isLiked,
+      likes: updatedPost.likes,
+      timestamp: new Date(),
+    };
 
-      const populatedPost = await populatePost(postId, ["likes", "author"]);
-      if (!populatedPost) {
-        throw new Error("Failed to fetch updated post");
-      }
+    // Send response first
+    res.json({
+      success: true,
+      isLiked: !isLiked,
+      likes: updatedPost.likes,
+    });
 
-      const isLiked = updatedPost.likes.includes(userId); // Verify state after update
-      console.log(
-        `After update: postId=${postId}, userId=${userId}, isLiked=${isLiked}, likesCount=${
-          populatedPost.likes.length
-        }, action=${wasLiked ? "unliked" : "liked"}`
-      );
+    // Emit socket event
+    req.app.get("io").emit("likeUpdated", likeUpdateEvent);
+    console.log("[LIKE] Emitted likeUpdated event:", likeUpdateEvent);
 
-      req.app.get("io").emit("likeUpdated", {
-        postId,
-        userId,
-        isLiked,
-        likesCount: populatedPost.likes.length,
-        likes: populatedPost.likes,
-        requestId,
-        timestamp,
+    // Send notification only when liking (not when unliking)
+    if (!isLiked && post.author._id.toString() !== userId.toString()) {
+      const notification = {
+        recipient: post.author._id,
+        sender: userId,
+        type: "like",
+        post: postId,
+        message: `${req.user.name} liked your post`,
+      };
+
+      // Check for recent notifications
+      const recentNotification = await Notification.findOne({
+        recipient: post.author._id,
+        sender: userId,
+        type: "like",
+        post: postId,
+        createdAt: { $gte: new Date(Date.now() - 1000) }, // Within last second
       });
 
-      // Send notification only when the post is liked
-      if (isLiked && post.author.toString() !== userId.toString()) {
-        const user = await User.findById(userId)
-          .select("name")
-          .session(session);
-        if (!user) {
-          console.warn(
-            `User not found for notification: ${userId}, requestId=${requestId}`
-          );
-        } else {
-          const recentNotification = await Notification.findOne({
-            recipient: post.author,
-            sender: userId,
-            post: postId,
-            type: "like",
-            createdAt: { $gte: new Date(Date.now() - 1000) },
-          }).session(session);
-
-          if (!recentNotification) {
-            const notification = await Notification.create(
-              [
-                {
-                  recipient: post.author,
-                  sender: userId,
-                  post: postId,
-                  type: "like",
-                  message: `${user.name} liked your post`,
-                },
-              ],
-              { session }
-            );
-
-            console.log(
-              `Notification sent: postId=${postId}, recipient=${post.author}, sender=${userId}, requestId=${requestId}, message="${user.name} liked your post"`
-            );
-
-            req.app
-              .get("io")
-              .to(post.author.toString())
-              .emit("newNotification", {
-                _id: notification[0]._id,
-                type: "like",
-                sender: { _id: user._id, name: user.name },
-                message: `${user.name} liked your post`,
-                link: `/post/${postId}`,
-                createdAt: notification[0].createdAt,
-                requestId,
-                timestamp,
-              });
-          } else {
-            console.log(
-              `Notification skipped (duplicate): postId=${postId}, userId=${userId}, requestId=${requestId}`
-            );
-          }
-        }
+      if (!recentNotification) {
+        const newNotification = await Notification.create(notification);
+        // Emit to specific user's room
+        req.app.get("io").to(post.author._id.toString()).emit("newNotification", {
+          _id: newNotification._id,
+          type: "like",
+          sender: { _id: userId, name: req.user.name },
+          message: `${req.user.name} liked your post`,
+          link: `/post/${postId}`,
+          createdAt: newNotification.createdAt,
+        });
+        console.log("[LIKE] Sent notification:", newNotification);
       } else {
-        console.log(
-          `No notification sent: postId=${postId}, userId=${userId}, requestId=${requestId}, isLiked=${isLiked}, isOwnPost=${post.author.toString() === userId.toString()}`
-        );
+        console.log("[LIKE] Skipped duplicate notification");
       }
-
-      res.json({
-        success: true,
-        message: isLiked ? "Post liked" : "Post unliked",
-        likesCount: populatedPost.likes.length,
-        likes: populatedPost.likes,
-        isLiked,
-        requestId,
-        timestamp,
-      });
-    });
-
-    await session.endSession();
-  } catch (err) {
-    console.error(
-      `Toggle like error for postId ${req.params.postId}, requestId=${req.body.requestId || "unknown"}: ${err.message}`
-    );
-    res.status(err.message === "Post not found" ? 404 : 500).json({
-      success: false,
-      message: "Failed to toggle like",
-      error: err.message,
-    });
+    }
+  } catch (error) {
+    console.error("[LIKE] Error:", error);
+    res.status(500).json({ message: "Error toggling like" });
   }
 };
 
@@ -676,85 +611,90 @@ const deletePost = async (req, res) => {
 const resharePost = async (req, res) => {
   try {
     const { postId } = req.params;
-    if (!isValidObjectId(postId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid post ID",
-      });
-    }
-    if (!req.user || !req.user._id || !isValidObjectId(req.user._id)) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized: Invalid or missing user",
-      });
-    }
     const userId = req.user._id;
 
-    const originalPost = await Post.findById(postId);
-    if (!originalPost) {
-      return res.status(404).json({
+    // Check if user has already reshared this post
+    const existingReshare = await Post.findOne({
+      author: userId,
+      sharedFrom: postId
+    });
+
+    if (existingReshare) {
+      return res.status(400).json({ 
         success: false,
-        message: "Original post not found",
+        message: "You have already reshared this post" 
       });
     }
 
-    const resharedPost = await Post.create({
+    const originalPost = await Post.findById(postId)
+      .populate("author", "name profilePicture")
+      .populate("sharedFrom", "author content");
+
+    if (!originalPost) {
+      return res.status(404).json({ 
+        success: false,
+        // message: "Post not found" 
+      });
+    }
+
+    // Prevent resharing your own post
+    if (originalPost.author._id.toString() === userId.toString()) {
+      return res.status(400).json({ 
+        success: false,
+        message: "You cannot reshare your own post" 
+      });
+    }
+
+    const reshare = await Post.create({
       author: userId,
       content: originalPost.content,
-      mediaUrl: originalPost.mediaUrl,
       sharedFrom: originalPost._id,
+      mediaUrl: originalPost.mediaUrl,
     });
 
-    const populatedPost = await populatePost(resharedPost._id, [
-      "author",
-      "sharedFrom",
-    ]);
+    const populatedReshare = await Post.findById(reshare._id)
+      .populate("author", "name profilePicture")
+      .populate("sharedFrom", "author content");
 
-    req.app.get("io").emit("postCreated", {
-      post: populatedPost,
+    const io = req.app.get("io");
+
+    // Emit to all users for real-time feed update
+    io.emit("postCreated", { 
+      post: populatedReshare, 
       userId,
+      type: "reshare",
+      isNewReshare: true
     });
 
-    if (originalPost.author.toString() !== userId.toString()) {
-      const user = await User.findById(userId).select("name");
-      if (!user) {
-        console.warn(`User not found for notification: ${userId}`);
-      } else {
-        const notification = await Notification.create({
-          recipient: originalPost.author,
-          sender: userId,
-          post: originalPost._id,
-          type: "reshare",
-          message: `${user.name} reshared your post`,
-        });
+    // Create notification for original post author
+    if (originalPost.author._id.toString() !== userId.toString()) {
+      const notification = await Notification.create({
+        recipient: originalPost.author._id,
+        sender: userId,
+        post: originalPost._id,
+        type: "reshare",
+        message: `${req.user.name} reshared your post`
+      });
 
-        req.app
-          .get("io")
-          .to(originalPost.author.toString())
-          .emit("newNotification", {
-            _id: notification._id,
-            type: "reshare",
-            sender: { _id: user._id, name: user.name },
-            message: `${user.name} reshared your post`,
-            link: `/post/${resharedPost._id}`,
-            createdAt: notification.createdAt,
-          });
-      }
+      io.to(originalPost.author._id.toString()).emit("newNotification", {
+        _id: notification._id,
+        type: "reshare",
+        sender: { _id: userId, name: req.user.name },
+        post: originalPost._id,
+        createdAt: notification.createdAt
+      });
     }
 
     res.status(201).json({
       success: true,
-      message: "Post reshared successfully",
-      post: populatedPost,
+      post: populatedReshare
     });
   } catch (err) {
-    console.error(
-      `Reshare post error for postId ${req.params.postId}: ${err.message}`
-    );
-    res.status(500).json({
+    console.error("Reshare error:", err);
+    res.status(500).json({ 
       success: false,
-      message: "Failed to reshare post",
-      error: err.message,
+      // message: "Failed to reshare post", 
+      error: err.message 
     });
   }
 };

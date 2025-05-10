@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect, useRef } from "react";
 import { useSocket } from "./SocketContext";
 import { toast } from "sonner";
 import notificationSound from "/notification.mp3";
+import api from "../api/axios";
 
 const NotificationContext = createContext();
 export const useNotifications = () => useContext(NotificationContext);
@@ -15,6 +16,21 @@ export const NotificationProvider = ({ children }) => {
 
   const activeChatIdRef = useRef(null);
   activeChatIdRef.current = activeChatId;
+
+  // Fetch initial notifications
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const response = await api.get("/notifications");
+        setNotifications(response.data);
+        setUnreadCount(response.data.filter((n) => !n.read).length);
+      } catch (error) {
+        console.error("Failed to fetch notifications:", error);
+      }
+    };
+
+    fetchNotifications();
+  }, []);
 
   useEffect(() => {
     if (!socket) return;
@@ -52,9 +68,14 @@ export const NotificationProvider = ({ children }) => {
     };
   }, [socket]); // ✅ Now stable, won't rebind on activeChatId change
 
-  const markAsRead = (notifId) => {
-    setNotifications((prev) => prev.filter((n) => n._id !== notifId));
-    setUnreadCount((prev) => Math.max(0, prev - 1));
+  const markAsRead = async (notifId) => {
+    try {
+      await api.patch(`/notifications/${notifId}/read`);
+      setNotifications((prev) => prev.filter((n) => n._id !== notifId));
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error("Failed to mark notification as read:", error);
+    }
   };
 
   return (

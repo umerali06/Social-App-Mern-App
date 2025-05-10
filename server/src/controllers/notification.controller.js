@@ -12,16 +12,21 @@ const createNotification = async (req, res) => {
       post,
     });
 
+    // Populate the notification with sender and post data
+    const populatedNotification = await Notification.findById(notification._id)
+      .populate("sender", "name profilePicture")
+      .populate("post", "_id content");
+
     const io = req.app.get("io");
     io.to(recipient.toString()).emit("newNotification", {
-      _id: notification._id,
+      _id: populatedNotification._id,
       type,
-      sender: { _id: req.user._id, name: req.user.name },
-      post,
-      createdAt: notification.createdAt,
+      sender: populatedNotification.sender,
+      post: populatedNotification.post,
+      createdAt: populatedNotification.createdAt,
     });
 
-    res.status(201).json(notification);
+    res.status(201).json(populatedNotification);
   } catch (err) {
     res
       .status(500)
@@ -34,7 +39,7 @@ const getNotifications = async (req, res) => {
   try {
     const notifications = await Notification.find({ recipient: req.user._id })
       .populate("sender", "name profilePicture")
-      .populate("post", "content")
+      .populate("post", "_id content")
       .sort({ createdAt: -1 });
 
     res.json(notifications);
